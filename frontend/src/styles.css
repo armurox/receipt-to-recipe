@@ -1,0 +1,11 @@
+:root{ font-family: ui-sans-serif, system-ui, Arial, sans-serif; color: #111 }
+body{ margin:0; background:#f7f7fb }
+.wrap{ max-width: 960px; margin: 32px auto; padding: 0 16px }
+.card{ background:white; padding:16px; border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.05); margin-bottom:12px }
+button{ background:#2563eb; color:white; border:none; padding:8px 14px; border-radius:8px; cursor:pointer }
+button:disabled{ background:#9aa7c7 }
+.grid{ display:grid; gap:12px }
+.grid.cols-2{ grid-template-columns: 1fr 1fr }
+.badge{ display:inline-block; padding:4px 8px; background:#eef; border-radius:999px; margin:4px 6px 0 0 }
+.recipes{ display:grid; gap:12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.recipes img{ width:100%; border-radius:10px }
