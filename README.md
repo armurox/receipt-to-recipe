@@ -28,4 +28,4 @@ npm run dev
 ## Notes
 - OCR uses `pytesseract`. Install Tesseract locally and set `TESSERACT_CMD` in `backend/.env` if needed.
 - Recipe results are cached per exact ingredient set in the `RecipeCache` table.
-- This is a starter you can extend with auth, better NLP normalization, or async jobs (Celery).
+- Work in progress
