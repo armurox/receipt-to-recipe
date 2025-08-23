@@ -5,3 +5,4 @@ pytesseract>=0.3
 python-dotenv>=1.0
 requests>=2.31
 django-cors-headers>=4.0
+openai>=1.0
