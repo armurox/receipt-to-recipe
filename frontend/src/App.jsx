@@ -19,13 +19,53 @@ export default function App(){
     }catch(e){ setError('Failed to load ingredients') }
   }
 
+  const loadModelsFromCache = () => {
+    const cached = localStorage.getItem('openrouter_models')
+    const cacheTime = localStorage.getItem('openrouter_models_time')
+    const oneHour = 60 * 60 * 1000
+    
+    if (cached && cacheTime && Date.now() - parseInt(cacheTime) < oneHour) {
+      return JSON.parse(cached)
+    }
+    return null
+  }
+
+  const saveModelsToCache = (models) => {
+    localStorage.setItem('openrouter_models', JSON.stringify(models))
+    localStorage.setItem('openrouter_models_time', Date.now().toString())
+  }
+
   const loadSettings = async () => {
     try{
       const res = await fetch(`${API_BASE}/settings/`)
       const data = await res.json()
-      setAvailableModels(data.available_models)
+      
+      let models = loadModelsFromCache()
+      if (!models) {
+        const modelsRes = await fetch('https://openrouter.ai/api/v1/models')
+        const modelsData = await modelsRes.json()
+        models = modelsData.data
+          .filter(model => model.architecture?.input_modalities?.includes('image'))
+          .map(model => ({
+            id: model.id,
+            name: `${model.name} ($${(parseFloat(model.pricing?.prompt || 0) * 1000).toFixed(4)}/1K tokens)`,
+            pricing: model.pricing
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+        
+        models.unshift({ id: 'tesseract', name: 'Tesseract (Free, Local OCR)', pricing: null })
+        saveModelsToCache(models)
+      }
+      
+      setAvailableModels(models)
       setSelectedModel(data.current_model)
-    }catch(e){ setError('Failed to load settings') }
+    }catch(e){ 
+      setAvailableModels([
+        { id: 'tesseract', name: 'Tesseract (Free, Local OCR)' },
+        { id: 'openai/gpt-4o', name: 'GPT-4 Vision (Fallback)' }
+      ])
+      setError('Failed to load models, using defaults') 
+    }
   }
 
   useEffect(()=>{ 
