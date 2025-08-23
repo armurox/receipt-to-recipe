@@ -73,3 +73,29 @@ CORS_ALLOW_ALL_ORIGINS = True
 
 SPOONACULAR_API_KEY = os.getenv('SPOONACULAR_API_KEY', '')
 TESSERACT_CMD = os.getenv('TESSERACT_CMD')
+
+OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
+OCR_SERVICE = os.getenv('OCR_SERVICE', 'openrouter')
+OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'openai/gpt-4o')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'api.openrouter_ocr': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'api.ocr_factory': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}

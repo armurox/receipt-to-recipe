@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8081/api'
 
 export default function App(){
   const [ingredients, setIngredients] = useState([])
@@ -9,16 +9,69 @@ export default function App(){
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [availableModels, setAvailableModels] = useState([])
+  const [selectedModel, setSelectedModel] = useState('')
 
   const loadIngredients = async () => {
     try{
       const res = await fetch(`${API_BASE}/ingredients/`)
-      const data = await res.json()
-      setIngredients(data)
+      setIngredients(await res.json())
     }catch(e){ setError('Failed to load ingredients') }
   }
 
-  useEffect(()=>{ loadIngredients() }, [])
+  const loadModelsFromCache = () => {
+    const cached = localStorage.getItem('openrouter_models')
+    const cacheTime = localStorage.getItem('openrouter_models_time')
+    const oneHour = 60 * 60 * 1000
+    
+    if (cached && cacheTime && Date.now() - parseInt(cacheTime) < oneHour) {
+      return JSON.parse(cached)
+    }
+    return null
+  }
+
+  const saveModelsToCache = (models) => {
+    localStorage.setItem('openrouter_models', JSON.stringify(models))
+    localStorage.setItem('openrouter_models_time', Date.now().toString())
+  }
+
+  const loadSettings = async () => {
+    try{
+      const res = await fetch(`${API_BASE}/settings/`)
+      const data = await res.json()
+      
+      let models = loadModelsFromCache()
+      if (!models) {
+        const modelsRes = await fetch('https://openrouter.ai/api/v1/models')
+        const modelsData = await modelsRes.json()
+        models = modelsData.data
+          .filter(model => model.architecture?.input_modalities?.includes('image'))
+          .map(model => ({
+            id: model.id,
+            name: `${model.name} ($${(parseFloat(model.pricing?.prompt || 0) * 1000).toFixed(4)}/1K tokens)`,
+            pricing: model.pricing
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+        
+        models.unshift({ id: 'tesseract', name: 'Tesseract (Free, Local OCR)', pricing: null })
+        saveModelsToCache(models)
+      }
+      
+      setAvailableModels(models)
+      setSelectedModel(data.current_model)
+    }catch(e){ 
+      setAvailableModels([
+        { id: 'tesseract', name: 'Tesseract (Free, Local OCR)' },
+        { id: 'openai/gpt-4o', name: 'GPT-4 Vision (Fallback)' }
+      ])
+      setError('Failed to load models, using defaults') 
+    }
+  }
+
+  useEffect(()=>{ 
+    loadIngredients()
+    loadSettings()
+  }, [])
 
   const toggle = (id) => {
     const s = new Set(selected)
@@ -28,17 +81,19 @@ export default function App(){
 
   const upload = async (e) => {
     e.preventDefault()
-    if(!file){ return }
+    if(!file) return
     setLoading(true); setError('')
     const form = new FormData()
     form.append('image', file)
+    if(selectedModel) form.append('model', selectedModel)
     try{
       const res = await fetch(`${API_BASE}/receipts/`, { method: 'POST', body: form })
-      if(!res.ok){ throw new Error('upload failed') }
+      if(!res.ok) throw new Error('upload failed')
       await res.json()
       await loadIngredients()
-    }catch(e){ setError('Upload/OCR failed') }
-    finally{ setLoading(false); setFile(null) }
+      setFile(null)
+    }catch(e){ setError('Upload/OCR failed - you can retry with the same file') }
+    finally{ setLoading(false) }
   }
 
   const getRecipes = async () => {
@@ -46,26 +101,66 @@ export default function App(){
     setLoading(true); setError('')
     try{
       const res = await fetch(`${API_BASE}/recipes/`, {
-        method: 'POST', headers: { 'Content-Type':'application/json' },
+        method: 'POST', 
+        headers: { 'Content-Type':'application/json' },
         body: JSON.stringify({ ingredient_ids: Array.from(selected), number: 12 })
       })
-      if(!res.ok){ throw new Error('fetch failed') }
-      const data = await res.json()
-      setRecipes(data)
+      if(!res.ok) throw new Error('fetch failed')
+      setRecipes(await res.json())
     }catch(e){ setError('Recipe fetch failed') }
     finally{ setLoading(false) }
   }
 
+  const clearError = () => setError('')
+
   return (
     <div className="wrap">
       <h1>Receipt → Recipe</h1>
+      
+      <div className="card">
+        <h3>OCR Model Settings</h3>
+        <div style={{marginBottom: 12}}>
+          <label>Choose OCR Model:</label>
+          <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} style={{marginLeft: 8, padding: 4}}>
+            {availableModels.map(model => (
+              <option key={model.id} value={model.id}>{model.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <div className="card">
         <h3>Upload a receipt</h3>
         <form onSubmit={upload}>
-          <input type="file" accept="image/*" onChange={(e)=>setFile(e.target.files?.[0] || null)} />
-          <button disabled={loading || !file} type="submit">Upload & Extract</button>
+          <input type="file" accept="image/*" onChange={(e)=>{setFile(e.target.files?.[0] || null); clearError()}} />
+          <div style={{marginTop: 8}}>
+            <button disabled={loading || !file} type="submit">
+              {loading ? 'Processing...' : 'Upload & Extract'}
+            </button>
+            {file && error && (
+              <button type="button" onClick={() => setFile(null)} style={{marginLeft: 8, background: '#ccc'}}>
+                Clear File
+              </button>
+            )}
+          </div>
         </form>
-        <p style={{color:'#b00'}}>{error}</p>
+        {error && (
+          <div style={{color:'#b00', marginTop: 8}}>
+            {error}
+            {file && (
+              <div style={{marginTop: 4}}>
+                <button onClick={clearError} style={{fontSize: '12px', padding: '2px 8px'}}>
+                  Dismiss
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        {file && (
+          <p style={{color:'#666', fontSize:'14px', marginTop: 8}}>
+            File ready: {file.name}
+          </p>
+        )}
       </div>
 
       <div className="card">
