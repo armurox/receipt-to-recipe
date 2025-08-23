@@ -5,6 +5,7 @@ from typing import List, Tuple, Optional
 from PIL import Image
 from openai import OpenAI
 from django.conf import settings
+from .image_processor import preprocess_image
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,8 @@ def _call_openrouter_vision(image_path: str, model: str = None) -> str:
 
 def extract_ingredients_from_image(path: str, model: str = None) -> Tuple[str, List[str]]:
     try:
-        response_text = _call_openrouter_vision(path, model)
+        processed_path = preprocess_image(path)
+        response_text = _call_openrouter_vision(processed_path, model)
         raw_text, ingredients = _parse_openrouter_response(response_text)
         return raw_text, ingredients
     except Exception as e:
