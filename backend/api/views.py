@@ -6,8 +6,9 @@ from rest_framework.views import APIView
 
 from .models import Ingredient, Receipt, RecipeCache
 from .serializers import IngredientSerializer, ReceiptSerializer, ReceiptUploadSerializer
-from .ocr import extract_ingredients_from_image
+from .ocr_factory import extract_ingredients_from_image
 from .spoonacular import find_recipes_by_ingredients
+from django.conf import settings
 
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all().order_by('name')
@@ -26,7 +27,9 @@ class ReceiptViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         receipt = serializer.save()
-        text, names = extract_ingredients_from_image(receipt.image.path)
+        
+        model = request.data.get('model')
+        text, names = extract_ingredients_from_image(receipt.image.path, model)
         receipt.ocr_text = text
         ing_objs = []
         for name in names:
@@ -57,3 +60,22 @@ class RecipeView(APIView):
         data = find_recipes_by_ingredients(names, number=number)
         RecipeCache.objects.create(ingredients_hash=key, response_json=data)
         return Response(data)
+
+class SettingsView(APIView):
+    def get(self, request):
+        available_models = [
+            {'id': 'openai/gpt-4o', 'name': 'GPT-4 Vision (Fast & Accurate)'},
+            {'id': 'openai/gpt-4o-mini', 'name': 'GPT-4 Vision Mini (Fastest)'},
+            {'id': 'anthropic/claude-3.5-sonnet', 'name': 'Claude 3.5 Sonnet (Most Accurate)'},
+            {'id': 'anthropic/claude-3-haiku', 'name': 'Claude 3 Haiku (Fast)'},
+            {'id': 'google/gemini-pro-vision', 'name': 'Gemini Pro Vision'},
+            {'id': 'tesseract', 'name': 'Tesseract (Free, Local OCR)'}
+        ]
+        current_ocr_service = getattr(settings, 'OCR_SERVICE', 'openrouter')
+        current_model = getattr(settings, 'OPENROUTER_MODEL', 'openai/gpt-4o')
+        
+        return Response({
+            'available_models': available_models,
+            'current_ocr_service': current_ocr_service,
+            'current_model': current_model if current_ocr_service == 'openrouter' else 'tesseract'
+        })
